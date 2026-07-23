@@ -54,15 +54,13 @@ No root, no sudo, no git? Still works — everything installs into `$HOME` only:
 
 ## Uninstall
 
-```sh
-./uninstall.sh
-```
-
-or without a clone:
+The installer always leaves a copy of the uninstaller on the machine, so no matter how you installed:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/primerpy/tmux-config/main/uninstall.sh | bash
+~/.config/tmux/uninstall.sh
 ```
+
+(Equivalent: `./uninstall.sh` from a clone, or `curl -fsSL https://raw.githubusercontent.com/primerpy/tmux-config/main/uninstall.sh | bash`.)
 
 Removes `~/.config/tmux` (config, plugins, theme) and the `t` alias block from your shell rc files. Saved resurrect sessions and the backups made by the installer are kept unless you opt in to deleting/restoring them. tmux itself is never uninstalled.
 

@@ -143,6 +143,19 @@ else
   info "Installed tmux.conf from GitHub"
 fi
 
+# Keep a local copy of the uninstaller so removal never needs the repo,
+# even when installed via curl | bash.
+if [ -n "$script_dir" ] && [ -f "$script_dir/uninstall.sh" ]; then
+  cp "$script_dir/uninstall.sh" "$TMUX_DIR/uninstall.sh"
+else
+  fetch "$RAW_URL/uninstall.sh" "$TMUX_DIR/uninstall.sh" \
+    || warn "Could not download uninstall.sh; get it from the repo if you ever need it."
+fi
+if [ -f "$TMUX_DIR/uninstall.sh" ]; then
+  chmod +x "$TMUX_DIR/uninstall.sh"
+  info "Uninstaller saved to ~/.config/tmux/uninstall.sh"
+fi
+
 # --- Plugins ------------------------------------------------------------------
 
 fetch_repo() {
@@ -233,4 +246,5 @@ Done! Quick reference (prefix is Ctrl-f):
   t                 attach or create the "main" session (new shells)
 
 Sessions auto-save every 15 min and auto-restore when tmux starts (continuum).
+Uninstall anytime: ~/.config/tmux/uninstall.sh
 EOF
