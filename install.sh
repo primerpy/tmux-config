@@ -79,10 +79,20 @@ fetch() {
 
 # --- Dependencies -----------------------------------------------------------
 
+# git is preferred, but locked-down servers (no sudo, no git) still work:
+# plugins are then downloaded as GitHub tarballs with curl/wget.
+HAVE_GIT=1
 if ! command -v git >/dev/null 2>&1; then
   info "git is not installed"
   pkg_install git || true
-  command -v git >/dev/null 2>&1 || die "git is required (macOS: xcode-select --install, Debian: apt install git, Fedora: dnf install git, Arch: pacman -S git)."
+  if ! command -v git >/dev/null 2>&1; then
+    HAVE_GIT=0
+    if command -v curl >/dev/null 2>&1 || command -v wget >/dev/null 2>&1; then
+      warn "Proceeding without git: plugins will be downloaded as tarballs ('prefix I' plugin updates won't work)."
+    else
+      die "Need git, or curl/wget, to fetch plugins (macOS: xcode-select --install, Debian: apt install git, Fedora: dnf install git, Arch: pacman -S git)."
+    fi
+  fi
 fi
 
 if ! command -v tmux >/dev/null 2>&1; then
@@ -135,23 +145,35 @@ fi
 
 # --- Plugins ------------------------------------------------------------------
 
-clone_if_missing() {
-  local url="$1" dest="$2"
+fetch_repo() {
+  # fetch_repo <owner/repo> <dest>: clone or update with git; without git,
+  # fall back to downloading a tarball of the repo's default branch.
+  local repo="$1" dest="$2" name tmp
+  name="$(basename "$dest")"
   if [ -d "$dest/.git" ]; then
-    info "$(basename "$dest") already present, updating"
-    git -C "$dest" pull --ff-only --quiet || warn "could not update $(basename "$dest")"
+    info "$name already present, updating"
+    git -C "$dest" pull --ff-only --quiet || warn "could not update $name"
+  elif [ -d "$dest" ]; then
+    info "$name already present"
+  elif [ "$HAVE_GIT" -eq 1 ]; then
+    git clone --quiet --depth 1 "https://github.com/$repo" "$dest"
+    info "Cloned $name"
   else
-    git clone --quiet --depth 1 "$url" "$dest"
-    info "Cloned $(basename "$dest")"
+    tmp="$(mktemp -d)"
+    fetch "https://codeload.github.com/$repo/tar.gz/HEAD" "$tmp/repo.tgz" || die "Could not download $repo"
+    mkdir -p "$dest"
+    tar -xzf "$tmp/repo.tgz" -C "$dest" --strip-components=1
+    rm -rf "$tmp"
+    info "Downloaded $name (tarball)"
   fi
 }
 
-clone_if_missing "https://github.com/odedlaz/tmux-onedark-theme" "$THEME_DIR"
+fetch_repo "odedlaz/tmux-onedark-theme" "$THEME_DIR"
 
-# Clone every plugin declared in tmux.conf (includes tpm itself), so the
+# Fetch every plugin declared in tmux.conf (includes tpm itself), so the
 # install never depends on a running tmux server.
 grep -E "^set -g @plugin '" "$CONF" | cut -d"'" -f2 | while read -r spec; do
-  clone_if_missing "https://github.com/$spec" "$PLUGIN_DIR/${spec##*/}"
+  fetch_repo "$spec" "$PLUGIN_DIR/${spec##*/}"
 done
 info "Plugins installed: $(ls "$PLUGIN_DIR" | tr '\n' ' ')"
 
@@ -183,12 +205,22 @@ fi
 
 # --- Activate -----------------------------------------------------------------
 
-if [ -n "${TMUX:-}" ]; then
+# If a tmux server is already running (e.g. migrating an existing machine),
+# apply the config to it live. Running sessions and programs are untouched;
+# the new prefix and bindings take effect immediately. Only quirk: options and
+# bindings from a previous config that this one doesn't override stay active
+# until the server restarts.
+if [ -n "${TMUX:-}" ] || tmux list-sessions >/dev/null 2>&1; then
   tmux source-file "$CONF"
-  info "Reloaded config in the current tmux session"
-elif tmux list-sessions >/dev/null 2>&1; then
-  tmux source-file "$CONF"
-  warn "A tmux server is already running; config was re-sourced, but restart tmux for a fully clean state."
+  info "Applied config to the running tmux server (sessions preserved, prefix is now Ctrl-f)"
+  cat <<'EOF'
+
+  Migrating from an old config? It's now backed up, and the new one is live.
+  For a completely clean slate while keeping your layout, when convenient:
+    Ctrl-f Ctrl-s        save sessions (resurrect)
+    tmux kill-server     note: running programs in panes will exit
+    t                    restart; windows, panes, paths and pane text return
+EOF
 fi
 
 cat <<'EOF'
