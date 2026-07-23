@@ -2,6 +2,8 @@
 
 My tmux setup: onedark theme, session save/restore with resurrect + continuum, vi mode, `Ctrl-f` prefix. One command to install on a new machine, one command to remove.
 
+Works on **macOS** (Homebrew) and **Debian/Ubuntu**, **Fedora**, and **Arch** based Linux (tested via the full install → boot → uninstall cycle on each).
+
 ## Install
 
 On a fresh machine (downloads everything it needs):
@@ -18,9 +20,12 @@ cd tmux-config
 ./install.sh
 ```
 
+(`wget -qO- <url> | bash` works too if you don't have curl.)
+
 The installer:
 
-- offers to install tmux via your package manager (brew / apt / dnf / pacman) if it's missing
+- offers to install git and tmux via your package manager (brew / apt / dnf / pacman) if missing
+- on Linux desktops, offers a clipboard helper for tmux-yank (`xsel` on X11, `wl-clipboard` on Wayland); macOS uses the built-in `pbcopy`, and headless/SSH machines fall back to OSC 52
 - backs up any existing `~/.tmux.conf` or `~/.config/tmux/tmux.conf` (timestamped, never deleted)
 - installs the config to `~/.config/tmux/tmux.conf`
 - clones [TPM](https://github.com/tmux-plugins/tpm) and the [onedark theme](https://github.com/odedlaz/tmux-onedark-theme), then installs all plugins headlessly

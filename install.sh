@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 #
 # Installs the tmux configuration from github.com/primerpy/tmux-config.
+# Supports macOS (Homebrew) and Debian/Ubuntu, Fedora, Arch based Linux.
 #
 # Works two ways:
 #   1. From a clone of the repo:   ./install.sh
@@ -23,7 +24,7 @@ for arg in "$@"; do
   case "$arg" in
     -y|--yes) ASSUME_YES=1 ;;
     -h|--help)
-      grep '^#' "$0" | sed 's/^# \{0,1\}//' | head -9
+      grep '^#' "$0" | sed 's/^# \{0,1\}//' | head -10
       exit 0
       ;;
     *) echo "Unknown option: $arg (try --help)" >&2; exit 1 ;;
@@ -43,24 +44,65 @@ confirm() {
   case "$reply" in n|N|no|NO) return 1 ;; *) return 0 ;; esac
 }
 
+SUDO=""
+if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
+  SUDO="sudo"
+fi
+
+pkg_install() {
+  # Installs package $1 with whichever supported package manager is present.
+  local pkg="$1"
+  if command -v brew >/dev/null 2>&1; then
+    confirm "Install $pkg with Homebrew?" && brew install "$pkg"
+  elif command -v apt-get >/dev/null 2>&1; then
+    confirm "Install $pkg with apt?" && $SUDO apt-get update -qq && $SUDO apt-get install -y "$pkg"
+  elif command -v dnf >/dev/null 2>&1; then
+    confirm "Install $pkg with dnf?" && $SUDO dnf install -y "$pkg"
+  elif command -v pacman >/dev/null 2>&1; then
+    confirm "Install $pkg with pacman?" && $SUDO pacman -Sy --noconfirm --needed "$pkg"
+  else
+    warn "No supported package manager found (brew/apt/dnf/pacman)."
+    return 1
+  fi
+}
+
+fetch() {
+  # fetch <url> <dest> using curl or wget, whichever exists.
+  if command -v curl >/dev/null 2>&1; then
+    curl -fsSL "$1" -o "$2"
+  elif command -v wget >/dev/null 2>&1; then
+    wget -qO "$2" "$1"
+  else
+    return 1
+  fi
+}
+
 # --- Dependencies -----------------------------------------------------------
 
-command -v git >/dev/null 2>&1 || die "git is required. Install it first (macOS: xcode-select --install, Debian/Ubuntu: sudo apt install git)."
+if ! command -v git >/dev/null 2>&1; then
+  info "git is not installed"
+  pkg_install git || true
+  command -v git >/dev/null 2>&1 || die "git is required (macOS: xcode-select --install, Debian: apt install git, Fedora: dnf install git, Arch: pacman -S git)."
+fi
 
 if ! command -v tmux >/dev/null 2>&1; then
   info "tmux is not installed"
-  if command -v brew >/dev/null 2>&1; then
-    confirm "Install tmux with Homebrew?" && brew install tmux
-  elif command -v apt-get >/dev/null 2>&1; then
-    confirm "Install tmux with apt?" && sudo apt-get update -qq && sudo apt-get install -y tmux
-  elif command -v dnf >/dev/null 2>&1; then
-    confirm "Install tmux with dnf?" && sudo dnf install -y tmux
-  elif command -v pacman >/dev/null 2>&1; then
-    confirm "Install tmux with pacman?" && sudo pacman -S --noconfirm tmux
-  fi
+  pkg_install tmux || true
   command -v tmux >/dev/null 2>&1 || die "tmux is still missing; install it manually and re-run."
 fi
 info "Using $(tmux -V)"
+
+# tmux-yank needs a clipboard helper on Linux (macOS ships pbcopy). Only
+# relevant on machines with a display; over SSH/headless, OSC 52
+# (set-clipboard on) handles copying through the terminal instead.
+if [ "$(uname -s)" = "Linux" ] && { [ -n "${DISPLAY:-}" ] || [ -n "${WAYLAND_DISPLAY:-}" ]; }; then
+  if ! command -v xsel >/dev/null 2>&1 && ! command -v xclip >/dev/null 2>&1 \
+     && ! command -v wl-copy >/dev/null 2>&1; then
+    if [ -n "${WAYLAND_DISPLAY:-}" ]; then clip_pkg="wl-clipboard"; else clip_pkg="xsel"; fi
+    warn "No clipboard tool found; tmux-yank needs one on Linux desktops"
+    pkg_install "$clip_pkg" || warn "Install $clip_pkg manually for clipboard copy to work."
+  fi
+fi
 
 # --- Back up anything that would conflict ------------------------------------
 
@@ -87,7 +129,7 @@ if [ -n "$script_dir" ] && [ -f "$script_dir/tmux.conf" ]; then
   cp "$script_dir/tmux.conf" "$CONF"
   info "Installed tmux.conf from local repo"
 else
-  curl -fsSL "$RAW_URL/tmux.conf" -o "$CONF" || die "Could not download tmux.conf"
+  fetch "$RAW_URL/tmux.conf" "$CONF" || die "Could not download tmux.conf (need curl or wget)."
   info "Installed tmux.conf from GitHub"
 fi
 
