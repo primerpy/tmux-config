@@ -75,6 +75,15 @@ for dir in "${RESURRECT_DIRS[@]}"; do
   fi
 done
 
+# Remove the alias block install.sh added to shell rc files. Pre-existing
+# unmarked aliases are left alone.
+for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
+  if [ -f "$rc" ] && grep -q '# >>> tmux-config >>>' "$rc"; then
+    sed -i.bak '/# >>> tmux-config >>>/,/# <<< tmux-config <<</d' "$rc" && rm -f "$rc.bak"
+    info "Removed 't' alias block from ${rc/#$HOME/~}"
+  fi
+done
+
 # Offer to restore the most recent backups made by install.sh.
 latest_conf_backup="$(ls -t "$HOME"/.tmux.conf.backup-* 2>/dev/null | head -1 || true)"
 if [ -n "$latest_conf_backup" ]; then

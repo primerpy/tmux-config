@@ -155,6 +155,32 @@ grep -E "^set -g @plugin '" "$CONF" | cut -d"'" -f2 | while read -r spec; do
 done
 info "Plugins installed: $(ls "$PLUGIN_DIR" | tr '\n' ' ')"
 
+# --- Shell alias --------------------------------------------------------------
+
+ALIAS_LINE="alias t='tmux new-session -A -s main'"
+
+add_alias() {
+  local rc="$1"
+  if grep -qsF "$ALIAS_LINE" "$rc"; then
+    info "Alias 't' already present in ${rc/#$HOME/~}"
+  else
+    printf '\n# >>> tmux-config >>>\n# tmux: create or attach to a "main" session\n%s\n# <<< tmux-config <<<\n' \
+      "$ALIAS_LINE" >> "$rc"
+    info "Added alias 't' (attach/create session \"main\") to ${rc/#$HOME/~}"
+  fi
+}
+
+rc_found=0
+for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
+  [ -f "$rc" ] && { add_alias "$rc"; rc_found=1; }
+done
+if [ "$rc_found" -eq 0 ]; then
+  case "$(basename "${SHELL:-bash}")" in
+    zsh) add_alias "$HOME/.zshrc" ;;
+    *)   add_alias "$HOME/.bashrc" ;;
+  esac
+fi
+
 # --- Activate -----------------------------------------------------------------
 
 if [ -n "${TMUX:-}" ]; then
@@ -172,6 +198,7 @@ Done! Quick reference (prefix is Ctrl-f):
   Ctrl-f h / v      split keeping path    Ctrl-f c     new window keeping path
   Alt-arrows        switch panes          Shift-arrows switch windows
   Ctrl-f r          reload config         Ctrl-f I     (re)install plugins
+  t                 attach or create the "main" session (new shells)
 
 Sessions auto-save every 15 min and auto-restore when tmux starts (continuum).
 EOF
