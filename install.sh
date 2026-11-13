@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 #
 # Installs the tmux configuration from github.com/primerpy/tmux-config.
-# Supports macOS (Homebrew) and Debian/Ubuntu, Fedora, Arch based Linux.
+# Supports macOS (Homebrew or MacPorts) and Debian/Ubuntu, Fedora, Arch based Linux.
 #
 # Works two ways:
 #   1. From a clone of the repo:   ./install.sh
@@ -49,21 +49,47 @@ if [ "$(id -u)" -ne 0 ] && command -v sudo >/dev/null 2>&1; then
   SUDO="sudo"
 fi
 
+# MacPorts lives in /opt/local. If it's installed but not on PATH yet (e.g. a
+# shell opened before MacPorts was installed), add it at the end so tools the
+# user already has keep precedence.
+MACPORTS_BIN="/opt/local/bin"
+MACPORTS_PATH_ADDED=0
+if [ -x "$MACPORTS_BIN/port" ]; then
+  case ":$PATH:" in
+    *":$MACPORTS_BIN:"*) ;;
+    *) PATH="$PATH:$MACPORTS_BIN:/opt/local/sbin"; MACPORTS_PATH_ADDED=1 ;;
+  esac
+fi
+
 pkg_install() {
-  # Installs package $1 with whichever supported package manager is present.
-  local pkg="$1"
+  # Installs package $1 with the first supported package manager that works.
+  # A Mac can have both Homebrew and MacPorts: declining or failing one moves
+  # on to the next.
+  local pkg="$1" found=0
   if command -v brew >/dev/null 2>&1; then
-    confirm "Install $pkg with Homebrew?" && brew install "$pkg"
-  elif command -v apt-get >/dev/null 2>&1; then
-    confirm "Install $pkg with apt?" && $SUDO apt-get update -qq && $SUDO apt-get install -y "$pkg"
-  elif command -v dnf >/dev/null 2>&1; then
-    confirm "Install $pkg with dnf?" && $SUDO dnf install -y "$pkg"
-  elif command -v pacman >/dev/null 2>&1; then
-    confirm "Install $pkg with pacman?" && $SUDO pacman -Sy --noconfirm --needed "$pkg"
-  else
-    warn "No supported package manager found (brew/apt/dnf/pacman)."
-    return 1
+    found=1
+    confirm "Install $pkg with Homebrew?" && brew install "$pkg" && return 0
   fi
+  if command -v port >/dev/null 2>&1; then
+    found=1
+    # Absolute path: sudo may not search MacPorts' bin dir. -N: no prompts.
+    confirm "Install $pkg with MacPorts (sudo port install)?" \
+      && $SUDO "$(command -v port)" -N install "$pkg" && return 0
+  fi
+  if command -v apt-get >/dev/null 2>&1; then
+    found=1
+    confirm "Install $pkg with apt?" && $SUDO apt-get update -qq && $SUDO apt-get install -y "$pkg" && return 0
+  fi
+  if command -v dnf >/dev/null 2>&1; then
+    found=1
+    confirm "Install $pkg with dnf?" && $SUDO dnf install -y "$pkg" && return 0
+  fi
+  if command -v pacman >/dev/null 2>&1; then
+    found=1
+    confirm "Install $pkg with pacman?" && $SUDO pacman -Sy --noconfirm --needed "$pkg" && return 0
+  fi
+  [ "$found" -eq 1 ] || warn "No supported package manager found (brew/port/apt/dnf/pacman)."
+  return 1
 }
 
 fetch() {
@@ -100,7 +126,15 @@ if ! command -v tmux >/dev/null 2>&1; then
   pkg_install tmux || true
   command -v tmux >/dev/null 2>&1 || die "tmux is still missing; install it manually and re-run."
 fi
-info "Using $(tmux -V)"
+info "Using $(tmux -V) ($(command -v tmux))"
+
+# Found tmux only because MacPorts' bin dir was added above: the user's shell
+# can't run it (or the 't' alias) until that dir is on PATH.
+if [ "$MACPORTS_PATH_ADDED" -eq 1 ] && [ "$(command -v tmux)" = "$MACPORTS_BIN/tmux" ]; then
+  warn "tmux is from MacPorts, but $MACPORTS_BIN is not on your shell's PATH."
+  warn "Add this to ~/.zprofile (zsh) or ~/.bash_profile (bash), then open a new terminal:"
+  warn "  export PATH=\"/opt/local/bin:/opt/local/sbin:\$PATH\""
+fi
 
 # tmux-yank needs a clipboard helper on Linux (macOS ships pbcopy). Only
 # relevant on machines with a display; over SSH/headless, OSC 52
