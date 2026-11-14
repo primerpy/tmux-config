@@ -2,7 +2,7 @@
 
 My tmux setup: onedark theme, session save/restore with resurrect + continuum, vi mode, `Ctrl-f` prefix. One command to install on a new machine, one command to remove.
 
-Works on **macOS** (Homebrew) and **Debian/Ubuntu**, **Fedora**, and **Arch** based Linux (tested via the full install → boot → uninstall cycle on each).
+Works on **macOS** (Homebrew, or [MacPorts](https://www.macports.org), e.g. on Intel Macs) and **Debian/Ubuntu**, **Fedora**, and **Arch** based Linux (tested via the full install → boot → uninstall cycle on each).
 
 ## Install
 
@@ -24,7 +24,7 @@ cd tmux-config
 
 The installer:
 
-- offers to install git and tmux via your package manager (brew / apt / dnf / pacman) if missing
+- offers to install git and tmux via your package manager (brew / port / apt / dnf / pacman) if missing; on a Mac with both Homebrew and MacPorts, answering `n` to Homebrew (or a failed Homebrew install) moves on to MacPorts
 - on Linux desktops, offers a clipboard helper for tmux-yank (`xsel` on X11, `wl-clipboard` on Wayland); macOS uses the built-in `pbcopy`, and headless/SSH machines fall back to OSC 52
 - backs up any existing `~/.tmux.conf` or `~/.config/tmux/tmux.conf` (timestamped, never deleted)
 - installs the config to `~/.config/tmux/tmux.conf`
@@ -33,6 +33,14 @@ The installer:
 - reloads the config if tmux is already running
 
 Re-running it is safe (it updates plugins in place). Pass `-y` to skip prompts.
+
+### MacPorts
+
+With [MacPorts](https://www.macports.org/install.php) installed, the same one-liner works: if tmux or git is missing, it installs them with `sudo port install` (asks for your password). If MacPorts' `/opt/local/bin` isn't on your shell's `PATH` yet, the installer still finds it, and tells you the line to add to `~/.zprofile` so `tmux` and `t` work in new terminals:
+
+```sh
+export PATH="/opt/local/bin:/opt/local/sbin:$PATH"
+```
 
 ## Machines already running tmux
 
